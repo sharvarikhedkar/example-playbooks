@@ -1,18 +1,20 @@
 ---
-- name: Ping connectivity test
+- name: Run Ping Test
   hosts: localhost
   gather_facts: false
 
   tasks:
-    - name: Ping google.com
-      ansible.builtin.command: ping -c 3 google.com
-      register: ping_result
-      changed_when: false
+    - name: Request Google
+      ansible.builtin.uri:
+        url: https://www.google.com
+        method: GET
+        status_code: 200
+      register: google_response
       ignore_errors: true
 
-    - name: Assert ping succeeded
+    - name: Assert connectivity worked
       ansible.builtin.assert:
         that:
-          - ping_result.rc == 0
-        fail_msg: "Ping to google.com failed"
-        success_msg: "Ping to google.com succeeded"
+          - google_response.status == 200
+        fail_msg: "Connection to Google failed"
+        success_msg: "Connection to Google succeeded"
