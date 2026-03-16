@@ -1,17 +1,4 @@
 ---
-- name: "Wave {{ wave_number }} | Ping controller"
-  ansible.builtin.uri:
-    url: "{{ controller_api_url }}/ping/"
-    method: GET
-    validate_certs: true
-    status_code: 200
-    timeout: 15
-  register: latency_probe
-
-- name: "Wave {{ wave_number }} | Record response time"
-  ansible.builtin.set_fact:
-    latency_samples: "{{ latency_samples + [latency_probe.elapsed | float] }}"
-
 - name: "Wave {{ wave_number }} | Launch jobs"
   ansible.builtin.uri:
     url: "{{ controller_api_url }}/job_templates/{{ stress_job_template_id }}/launch/"
@@ -100,7 +87,6 @@
       - "Launch failures: {{ total_launch_failures }}"
       - "Job successes: {{ total_job_successes }}"
       - "Job failures: {{ total_job_failures }}"
-      - "API response time: {{ latency_probe.elapsed }}s"
 
 - name: "Wave {{ wave_number }} | Pause before next wave"
   ansible.builtin.pause:

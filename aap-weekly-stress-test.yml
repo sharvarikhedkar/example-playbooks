@@ -14,7 +14,6 @@
     total_launch_failures: 0
     total_job_failures: 0
     total_job_successes: 0
-    latency_samples: []
 
   tasks:
     - name: Verify target job template exists
@@ -54,7 +53,6 @@
           - "Total launch failures: {{ total_launch_failures }}"
           - "Total successful jobs: {{ total_job_successes }}"
           - "Total failed jobs: {{ total_job_failures }}"
-          - "Average API response time: {{ ((latency_samples | sum) / (latency_samples | length)) | round(2) if (latency_samples | length) > 0 else 'N/A' }}s"
 
     - name: Assert failure rate is acceptable
       ansible.builtin.assert:
