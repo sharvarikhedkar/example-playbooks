@@ -7,8 +7,8 @@
     number_of_waves: 12
     jobs_per_wave: 10
     wave_pause_seconds: 30
-    job_poll_interval_seconds: 15
-    job_timeout_seconds: 900
+    wait_for_and_check_if_job_finished_seconds: 15
+    wait_for_and_check_if_job_finished_timeout: 900
 
     total_jobs_launched: 0
     total_launch_failures: 0
@@ -54,13 +54,13 @@
           - "Total launch failures: {{ total_launch_failures }}"
           - "Total successful jobs: {{ total_job_successes }}"
           - "Total failed jobs: {{ total_job_failures }}"
-          - "Average API latency: {{ ((latency_samples | sum) / (latency_samples | length)) | round(2) if (latency_samples | length) > 0 else 'N/A' }}s"
+          - "Average API response time: {{ ((latency_samples | sum) / (latency_samples | length)) | round(2) if (latency_samples | length) > 0 else 'N/A' }}s"
 
     - name: Assert failure rate is acceptable
       ansible.builtin.assert:
         that:
           - total_jobs_launched | int > 0
-          - (total_launch_failures | int + total_job_failures | int) < ((total_jobs_launched | int + total_launch_failures | int) * 0.10)
+          - (total_launch_failures | int + total_job_failures | int) < (((total_jobs_launched | int) + (total_launch_failures | int)) * 0.10) | int
         fail_msg: >-
           More than 10% of launches/jobs failed.
           launched={{ total_jobs_launched }},

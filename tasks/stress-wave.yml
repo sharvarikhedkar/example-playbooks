@@ -1,5 +1,5 @@
 ---
-- name: "Wave {{ wave_number }} | Measure API latency"
+- name: "Wave {{ wave_number }} | Ping controller"
   ansible.builtin.uri:
     url: "{{ controller_api_url }}/ping/"
     method: GET
@@ -8,7 +8,7 @@
     timeout: 15
   register: latency_probe
 
-- name: "Wave {{ wave_number }} | Record latency sample"
+- name: "Wave {{ wave_number }} | Record response time"
   ansible.builtin.set_fact:
     latency_samples: "{{ latency_samples + [latency_probe.elapsed | float] }}"
 
@@ -27,28 +27,31 @@
   register: launched_jobs
   ignore_errors: true
 
-- name: "Wave {{ wave_number }} | Build list of launched job IDs"
+- name: "Wave {{ wave_number }} | Save launched jobs"
   ansible.builtin.set_fact:
-    wave_job_ids: >-
+    successful_launches: >-
       {{
         launched_jobs.results
         | selectattr('status', 'defined')
         | selectattr('status', 'equalto', 201)
-        | selectattr('json.id', 'defined')
-        | map(attribute='json.id')
         | list
       }}
 
-- name: "Wave {{ wave_number }} | Count launch results"
+- name: "Wave {{ wave_number }} | Extract job IDs"
   ansible.builtin.set_fact:
-    total_jobs_launched: "{{ total_jobs_launched | int + (wave_job_ids | length) }}"
-    total_launch_failures: >-
-      {{
-        total_launch_failures | int
-        + (jobs_per_wave | int - (wave_job_ids | length))
-      }}
+    wave_job_ids: "{{ successful_launches | map(attribute='json.id') | list }}"
 
-- name: "Wave {{ wave_number }} | Wait for launched jobs to finish"
+- name: "Wave {{ wave_number }} | Count launches"
+  ansible.builtin.set_fact:
+    launched_this_wave: "{{ wave_job_ids | length }}"
+    launch_failures_this_wave: "{{ (jobs_per_wave | int) - (launched_this_wave | int) }}"
+
+- name: "Wave {{ wave_number }} | Update launch totals"
+  ansible.builtin.set_fact:
+    total_jobs_launched: "{{ (total_jobs_launched | int) + (launched_this_wave | int) }}"
+    total_launch_failures: "{{ (total_launch_failures | int) + (launch_failures_this_wave | int) }}"
+
+- name: "Wave {{ wave_number }} | Wait for jobs"
   ansible.builtin.uri:
     url: "{{ controller_api_url }}/jobs/{{ item }}/"
     method: GET
@@ -59,59 +62,47 @@
     timeout: 15
   register: polled_jobs
   until: polled_jobs.json.finished is not none
-  retries: "{{ (job_timeout_seconds | int // job_poll_interval_seconds | int) | int }}"
-  delay: "{{ job_poll_interval_seconds }}"
+  retries: "{{ (wait_for_and_check_if_job_finished_timeout | int) // (wait_for_and_check_if_job_finished_seconds | int) }}"
+  delay: "{{ wait_for_and_check_if_job_finished_seconds }}"
   loop: "{{ wave_job_ids }}"
   loop_control:
     label: "job {{ item }}"
   ignore_errors: true
   when: wave_job_ids | length > 0
 
-- name: "Wave {{ wave_number }} | Count successful jobs"
+- name: "Wave {{ wave_number }} | Filter successful jobs"
   ansible.builtin.set_fact:
-    total_job_successes: >-
+    successful_jobs: >-
       {{
-        total_job_successes | int
-        + (
-            polled_jobs.results
-            | default([])
-            | selectattr('json.status', 'defined')
-            | selectattr('json.status', 'equalto', 'successful')
-            | list
-            | length
-          )
+        polled_jobs.results
+        | default([])
+        | selectattr('json.status', 'defined')
+        | selectattr('json.status', 'equalto', 'successful')
+        | list
       }}
 
-- name: "Wave {{ wave_number }} | Count failed jobs"
+- name: "Wave {{ wave_number }} | Count job results"
   ansible.builtin.set_fact:
-    total_job_failures: >-
-      {{
-        total_job_failures | int
-        + (
-            wave_job_ids | length
-            - (
-                polled_jobs.results
-                | default([])
-                | selectattr('json.status', 'defined')
-                | selectattr('json.status', 'equalto', 'successful')
-                | list
-                | length
-              )
-          )
-      }}
+    success_count: "{{ successful_jobs | length }}"
+    failure_count: "{{ (wave_job_ids | length) - (success_count | int) }}"
 
-- name: "Wave {{ wave_number }} | Summary"
+- name: "Wave {{ wave_number }} | Update job totals"
+  ansible.builtin.set_fact:
+    total_job_successes: "{{ (total_job_successes | int) + (success_count | int) }}"
+    total_job_failures: "{{ (total_job_failures | int) + (failure_count | int) }}"
+
+- name: "Wave {{ wave_number }} | Show summary"
   ansible.builtin.debug:
     msg:
       - "Wave {{ wave_number }} complete"
-      - "Launched this wave: {{ wave_job_ids | length }}/{{ jobs_per_wave }}"
+      - "Launched this wave: {{ launched_this_wave }}/{{ jobs_per_wave }}"
       - "Total launched: {{ total_jobs_launched }}"
       - "Launch failures: {{ total_launch_failures }}"
       - "Job successes: {{ total_job_successes }}"
       - "Job failures: {{ total_job_failures }}"
-      - "API latency: {{ latency_probe.elapsed }}s"
+      - "API response time: {{ latency_probe.elapsed }}s"
 
 - name: "Wave {{ wave_number }} | Pause before next wave"
   ansible.builtin.pause:
     seconds: "{{ wave_pause_seconds }}"
-  when: wave_number < (number_of_waves | int)
+  when: wave_number < number_of_waves
