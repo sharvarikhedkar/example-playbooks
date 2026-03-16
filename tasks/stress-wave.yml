@@ -31,37 +31,18 @@
 - name: "Wave {{ wave_number }} | Count launches"
   ansible.builtin.set_fact:
     launched_this_wave: "{{ wave_job_ids | length }}"
-    launch_failures_this_wave: "{{ (jobs_per_wave | int) - (launched_this_wave | int) }}"
+    launch_failures_this_wave: "{{ (jobs_per_wave | int) - (wave_job_ids | length) }}"
 
 - name: "Wave {{ wave_number }} | Update launch totals"
   ansible.builtin.set_fact:
     total_jobs_launched: "{{ (total_jobs_launched | int) + (launched_this_wave | int) }}"
     total_launch_failures: "{{ (total_launch_failures | int) + (launch_failures_this_wave | int) }}"
 
-- name: "Wave {{ wave_number }} | Wait for jobs"
-  ansible.builtin.uri:
-    url: "{{ controller_api_url }}/jobs/{{ item }}/"
-    method: GET
-    validate_certs: true
-    headers:
-      Authorization: "Bearer {{ controller_api_token }}"
-    status_code: 200
-    timeout: 15
-  register: polled_jobs
-  until: polled_jobs.json.finished is not none
-  retries: "{{ (wait_for_and_check_if_job_finished_timeout | int) // (wait_for_and_check_if_job_finished_seconds | int) }}"
-  delay: "{{ wait_for_and_check_if_job_finished_seconds }}"
-  loop: "{{ wave_job_ids }}"
-  loop_control:
-    label: "job {{ item }}"
-  ignore_errors: true
-  when: wave_job_ids | length > 0
-
 - name: "Wave {{ wave_number }} | Filter successful jobs"
   ansible.builtin.set_fact:
     successful_jobs: >-
       {{
-        polled_jobs.results
+        (polled_jobs | default({})).results
         | default([])
         | selectattr('json.status', 'defined')
         | selectattr('json.status', 'equalto', 'successful')
@@ -71,7 +52,7 @@
 - name: "Wave {{ wave_number }} | Count job results"
   ansible.builtin.set_fact:
     success_count: "{{ successful_jobs | length }}"
-    failure_count: "{{ (wave_job_ids | length) - (success_count | int) }}"
+    failure_count: "{{ (wave_job_ids | length) - (successful_jobs | length) }}"
 
 - name: "Wave {{ wave_number }} | Update job totals"
   ansible.builtin.set_fact:

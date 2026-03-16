@@ -53,3 +53,7 @@
           API: OK | Auth: OK | EE: OK | Jobs API: OK |
           Controller version: {{ ping_result.json.version | default('unknown') }}
         fail_msg: "One or more health checks failed. Review task output above."
+
+    - name: Pause (extends job runtime for stress testing)
+      ansible.builtin.pause:
+        seconds: 30

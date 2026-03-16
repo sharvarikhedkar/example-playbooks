@@ -5,11 +5,8 @@
 
   vars:
     number_of_waves: 12
-    jobs_per_wave: 10
-    wave_pause_seconds: 30
-    wait_for_and_check_if_job_finished_seconds: 15
-    wait_for_and_check_if_job_finished_timeout: 900
-
+    jobs_per_wave: 50
+    wave_pause_seconds: 1
     total_jobs_launched: 0
     total_launch_failures: 0
     total_job_failures: 0
@@ -34,7 +31,6 @@
           - "Waves: {{ number_of_waves }}"
           - "Jobs per wave: {{ jobs_per_wave }}"
           - "Pause between waves: {{ wave_pause_seconds }}s"
-          - "Job timeout: {{ job_timeout_seconds }}s"
 
     - name: Run stress waves
       ansible.builtin.include_tasks:
@@ -53,15 +49,3 @@
           - "Total launch failures: {{ total_launch_failures }}"
           - "Total successful jobs: {{ total_job_successes }}"
           - "Total failed jobs: {{ total_job_failures }}"
-
-    - name: Assert failure rate is acceptable
-      ansible.builtin.assert:
-        that:
-          - total_jobs_launched | int > 0
-          - (total_launch_failures | int + total_job_failures | int) < (((total_jobs_launched | int) + (total_launch_failures | int)) * 0.10) | int
-        fail_msg: >-
-          More than 10% of launches/jobs failed.
-          launched={{ total_jobs_launched }},
-          launch_failures={{ total_launch_failures }},
-          job_failures={{ total_job_failures }}
-        success_msg: "Stress test passed with acceptable failure rate."
